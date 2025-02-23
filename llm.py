@@ -1,7 +1,7 @@
 from openai import OpenAI
-from config import MOONSHOT_API_KEY,ROLEPLAY_PROMPT
+from config import MOONSHOT_API_KEY,ROLEPLAY_PROMPT, UNIVERSAL_ROLEPLAY_PROMPT
 
-def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT, model: str = "moonshot-v1-8k"):
+def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = "moonshot-v1-8k"):
     """
     使用 Moonshot API 调用 LLM 接口，获取回复。
 
