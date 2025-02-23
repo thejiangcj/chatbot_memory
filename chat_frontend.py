@@ -8,7 +8,7 @@ st.caption("🚀 带有长期记忆的聊天哦")
 # 获取最新的记忆数据（从 FastAPI 获取）
 def get_memories():
     try:
-        response = requests.get("http://127.0.0.1:8000/memories")  # 调用获取所有记忆的 API
+        response = requests.get("http://localhost:8000/memories")  # 调用获取所有记忆的 API
         if response.status_code == 200:
             return response.json().get("memories", [])
         else:
@@ -18,16 +18,16 @@ def get_memories():
         st.error(f"Error: {e}")
         return []
 
-# 初始加载时获取所有记忆
-memories = get_memories()
-
-# 在侧边栏显示最新的 JSON 数据（每次都重新显示，覆盖原有内容）
-st.sidebar.subheader("现有记忆")
-st.sidebar.json(memories)  # 直接展示最新的记忆数据
-
-# 初始化聊天记录
+# 初始化聊天记录和记忆
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
+
+# 初始化 mem_changed 标志，默认值为 False
+mem_changed = False
+
+# 在侧边栏显示记忆数据，只更新一次，避免重复渲染
+if "memories" not in st.session_state:
+    st.session_state["memories"] = get_memories()  # 初始加载时获取记忆
 
 # 显示聊天记录
 for msg in st.session_state.messages:
@@ -42,19 +42,25 @@ if prompt := st.chat_input():
     # 向自定义 API 发送请求，获取聊天回复
     try:
         response = requests.post(
-            "http://127.0.0.1:8000/chat",  # API 地址
+            "http://localhost:8000/chat",  # API 地址
             json={"content": prompt}
         )
         if response.status_code == 200:
             json_response = response.json()
             bot_reply = json_response.get("reply", "No response from API.")
             mem_changed = json_response.get("has_mem", False)
+            
             if mem_changed:
                 bot_reply = bot_reply + "\n\n" + "[记忆已更新]"
                 
-                # 每次记忆更新后，重新获取并展示最新的记忆（覆盖之前的内容）
-                memories = get_memories()
-                st.sidebar.json(memories)  # 更新侧边栏的记忆展示
+                # 如果记忆更新，重新获取最新的记忆，并增量更新 session_state["memories"]
+                new_memories = get_memories()
+                
+                # 只增加新的记忆项，而不是完全覆盖
+                if new_memories != st.session_state["memories"]:
+                    st.session_state["memories"] = new_memories
+                    # 只在记忆变化时更新侧边栏
+                    st.sidebar.json(st.session_state["memories"])  # 更新侧边栏的记忆展示
             
             st.session_state.messages.append({"role": "assistant", "content": bot_reply})
             st.chat_message("assistant").write(bot_reply)
@@ -62,3 +68,7 @@ if prompt := st.chat_input():
             st.error("Error: Unable to fetch response from the backend.")
     except requests.exceptions.RequestException as e:
         st.error(f"Error: {e}")
+
+# 显示初始的记忆数据（如果没有变化）
+if "memories" in st.session_state and not mem_changed:
+    st.sidebar.json(st.session_state["memories"])  # 只显示当前存储的记忆

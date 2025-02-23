@@ -20,7 +20,6 @@ def chat_one(content: str):
     try:
         # 获取模型的回复
         print(f"用户输入: {content}")  # 打印用户输入
-        # reply = call_moonshot_llm(content)
         reply = reply_with_memory(content)
         print(f"模型回复: {reply}")  # 打印模型回复
         
@@ -44,17 +43,31 @@ def chat_one(content: str):
 def reply_with_memory(content: str):
     top_k = 3
     
-    memory = [item[0] for item in search_mem(content, 3)]
-    memory_str = "".join(memory)  # 使用 "" 来拼接列表中的元素    
+    # 获取相关记忆
+    memory = [item[0] for item in search_mem(content, top_k)] if search_mem(content, top_k) else []
+    
+    # 如果没有记忆，返回空字符串
+    if not memory:
+        memory_str = ""  # 没有记忆时，拼接为空字符串
+    else:
+        memory_str = "".join(memory)  # 使用 "" 来拼接列表中的元素    
     
     try:
         content = content + MEMORY_USE_PROMPT + memory_str
+        
+        # 调用 Moonshot API 获取回复
         reply = call_moonshot_llm(content)
+        
+        # 判断返回的内容是否包含错误信息
+        if "Error" in reply:
+            print(f"Moonshot API 错误：{reply}")  # 打印错误信息
+            return "抱歉，处理您的请求时出现错误。"  # 处理错误时返回自定义的错误信息
+        
         return reply
     except Exception as e:
         # 错误处理，捕获并打印异常
-        print(f"Error in chat_one: {e}")
-        return "抱歉，我无法处理这个请求。", False, ""  # 出现异常时返回默认值
+        print(f"Error in reply_with_memory: {e}")
+        return "抱歉，我无法处理这个请求。"  # 出现异常时返回默认值
 
 # extract_mem() - 使用 Moonshot LLM 分析用户输入，判断是否有需要抽取的记忆
 # 输入：content（用户的输入）
@@ -64,15 +77,27 @@ def extract_mem(content: str):
         # 调用 LLM 获取记忆分析结果
         print(f"分析用户输入的记忆: {content}")  # 打印分析的内容
         memory = call_moonshot_llm(prompt=f"用户:{content}", system_prompt=MEM_EXTRACTION_PROMPT)
+        
+        # 判断返回的内容是否包含错误信息
+        if "Error" in memory:
+            print(f"Moonshot API 错误：{memory}")  # 打印错误信息
+            return False, ""  # 返回默认值
+        
         print(f"记忆分析结果: {memory}")  # 打印分析结果
         
-        # 判断返回结果是否包含记忆
+        # 如果 LLM 返回的是多个记忆，用 '&&' 连接它们
         if memory == "无":
             print("没有抽取到有效的记忆")  # 没有记忆时的提示
             return False, ""
         else:
-            print(f"抽取到的记忆: {memory}")  # 打印抽取到的记忆
-            return True, memory
+            # 如果返回多个记忆，用 "&&" 隔开
+            memory_list = memory.split("&&")
+            # 去除多余的空格并清理空字符串
+            memory_list = [m.strip() for m in memory_list if m.strip()]
+            print(f"抽取到的记忆: {memory_list}")  # 打印抽取到的记忆
+            
+            # 返回拆分后的记忆条目
+            return True, memory_list
     
     except Exception as e:
         # 错误处理，捕获并打印异常
@@ -89,10 +114,7 @@ async def get_all_memories():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error occurred: {e}")
 
-    
-
 def search_mem(content: str, top_k: int):
-    
     import numpy as np
     
     print(f"搜索记忆的关键词：{content}")
@@ -108,20 +130,25 @@ def search_mem(content: str, top_k: int):
     # 转换为 numpy 数组以便处理
     similarity = np.array(similarity).flatten()  # 假设相似度是二维的，转换为一维
     
-    # 获取 top_k 个最大相似度的索引
-    top_k_indices = similarity.argsort()[-top_k:][::-1]  # argsort 会返回从小到大的索引，这里我们取反来获取最大的索引
+    # 判断相似度数组是否为空
+    if similarity.size > 0:
+        # 获取 top_k 个最大相似度的索引
+        top_k_indices = similarity.argsort()[-top_k:][::-1]  # argsort 会返回从小到大的索引，这里我们取反来获取最大的索引
     
-    print(f"最相似的 {top_k} 个记忆的索引：{top_k_indices}")
+        print(f"最相似的 {top_k} 个记忆的索引：{top_k_indices}")
     
-    # 获取对应的记忆
-    top_k_memories = [memories[i] for i in top_k_indices]
+        # 获取对应的记忆
+        top_k_memories = [memories[i] for i in top_k_indices]
     
-    print(f"最相似的 {top_k} 个记忆：")
-    for idx, memory in zip(top_k_indices, top_k_memories):
-        print(f"记忆 {idx}: {memory} (相似度: {similarity[idx]})")
+        print(f"最相似的 {top_k} 个记忆：")
+        for idx, memory in zip(top_k_indices, top_k_memories):
+            print(f"记忆 {idx}: {memory} (相似度: {similarity[idx]})")
     
-    # 返回最相似的记忆和相似度
-    return [(memories[i], similarity[i]) for i in top_k_indices]
+        # 返回最相似的记忆和相似度
+        return [(memories[i], similarity[i]) for i in top_k_indices]
+    else:
+        print("相似度数组为空")
+        return []  # 如果相似度数组为空，返回空列表
     
 # 创建聊天接口
 @app.post("/chat")
@@ -146,4 +173,3 @@ async def chat(request: ChatRequest):
 if __name__ == '__main__':
     result = search_mem("萨摩耶", 2)
     print(result)
-
