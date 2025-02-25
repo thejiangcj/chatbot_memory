@@ -1,4 +1,4 @@
-# my-langgraph
+# 网易作业：记忆+规划
 
 ## 启动方式 Docker
 
@@ -28,12 +28,22 @@ docker run -d -p 8000:8000 mem-backend
 
 3. 启动前端服务：
     ```bash
-    streamlit run chatbot.py
+    streamlit run chat_frontend.py
     ```
 
 ---
 
 ## 开发TODO
+
+[ ] 稳定性，memory.txt不存在的时候的异常处理
+
+[ ] 大模型API的rate limit问题解决一下，可以改为用Qwen或者其他支持高并发的模型
+
+[ ] 根据阈值进行记忆的筛选，避免出现
+
+[ ] （暂缓）更新记忆
+
+[ ] （暂缓）删除记忆
 
 ~~拟人回复用户~~
 
@@ -64,10 +74,6 @@ docker run -d -p 8000:8000 mem-backend
 ~~在拟人回复中利用记忆~~
 
 ~~对话页面前端~~
-
-[ ] （暂缓）更新记忆
-
-[ ] （暂缓）删除记忆
 
 ---
 
