@@ -29,6 +29,23 @@ mem_changed = False
 if "memories" not in st.session_state:
     st.session_state["memories"] = get_memories()  # 初始加载时获取记忆
 
+# 显示侧边栏的输入选项
+with st.sidebar:
+    # 对话模型下拉框
+    dialog_model = st.selectbox("对话模型", ["moonshot", "deepseek"])
+    
+    # 记忆模型下拉框
+    memory_model = st.selectbox("记忆抽取模型", ["qwen", "deepseek"])
+    
+    # 人设文本输入框
+    persona = st.text_area("人设", "请你扮演一个小狗狗和我说话，注意语气可爱、亲密，叫我“主人”，喜欢用emoji", height=100)
+    
+    # 频率输入框
+    frequency = st.number_input("记忆抽取频率", min_value=1, max_value=10, step=1, value = 1)
+    
+    # 记忆阈值输入框
+    memory_threshold = st.number_input("输入记忆阈值", min_value=0.0, max_value=1.0, step=0.01, value=0.6)
+
 # 显示聊天记录
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
@@ -41,9 +58,17 @@ if prompt := st.chat_input():
 
     # 向自定义 API 发送请求，获取聊天回复
     try:
+        # 发送所有用户选择的数据和输入内容到后端
         response = requests.post(
             "http://localhost:8000/chat",  # API 地址
-            json={"content": prompt}
+            json={
+                "content": prompt,
+                "dialog_model": dialog_model,
+                "memory_model": memory_model,
+                "persona": persona,
+                "frequency": frequency,
+                "memory_threshold": memory_threshold
+            }
         )
         if response.status_code == 200:
             json_response = response.json()
