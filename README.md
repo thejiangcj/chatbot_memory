@@ -5,13 +5,13 @@
 1. 打包
 
 ```bash
-docker build -t mem-backend .  
+docker build -t caizhuoyue126/memory-backend:v1.0 .
 ```
 
 2. 启动
 
 ```bash
-docker run -d -p 8000:8000 mem-backend
+docker run -d -p 8000:8000 caizhuoyue126/memory-backend:v1.0
 ```
 
 ## 启动方式 本地
@@ -23,7 +23,7 @@ docker run -d -p 8000:8000 mem-backend
 
 2. 启动后端服务：
     ```bash
-    fastapi dev api.py
+    fastapi dev chat.py
     ```
 
 3. 启动前端服务：
@@ -41,9 +41,9 @@ docker run -d -p 8000:8000 mem-backend
 
 [ ] 大模型API的rate limit问题解决一下，可以改为用Qwen或者其他支持高并发的模型
 
-[ ] 前后端修改：支持页面配置人设
+~~前后端修改：支持页面配置人设~~
 
-[ ] 前后端修改：支持选择对话模型和选择记忆模型
+~~前后端修改：支持选择对话模型和选择记忆模型~~
 
 [ ] 前后端修改：支持配置记忆抽取的频率（1轮1抽还是几轮一抽）
 

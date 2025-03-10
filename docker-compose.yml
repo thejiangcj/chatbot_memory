@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data  # 持久化 Redis 数据
+
+  backend:
+    image: caizhuoyue126/memory-backend:v1.0
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379
+
+  frontend:
+      build:
+        context: .
+        dockerfile: Dockerfile.frontend  # 使用前端 Dockerfile
+      container_name: my_frontend
+      ports:
+        - "8501:8501"
+      depends_on:
+        - backend
+
+volumes:
+  redis_data:
