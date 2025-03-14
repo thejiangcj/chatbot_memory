@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
 
 def process_and_merge_memory(new_mem: str, threshold: float):
     """处理新记忆条目，合并或替换现有记忆"""
+    threshold = 0.8
     existing_mems = get_all_db()
     
     
