@@ -1,9 +1,9 @@
 # LLM
-MOONSHOT_API_KEY = "sk-RlbaHG90PiKBNmqdq0UA8m57zKtDrCyL6yTY3UvcARIwKHbN"
+MOONSHOT_API_KEY = ""
 MOONSHOT_MODEL = "moonshot-v1-8k"
 
 
-DEEPSEEK_API_KEY = "sk-f560c0ee56ec47e18d5f0166e04bba77"
+DEEPSEEK_API_KEY = ""
 DEEPSEEK_MODEL = "deepseek-chat"
 
 # prompts
