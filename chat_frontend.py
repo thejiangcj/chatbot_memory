@@ -81,8 +81,22 @@ with st.sidebar:
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
+# 添加图片上传组件 by jcj
+uploaded_image = st.file_uploader("上传图片（支持PNG）", 
+                                type=["png"],
+                                key="image_uploader",
+                                accept_multiple_files=True)
+
 # 用户输入
 if prompt := st.chat_input():
+
+    # 如果上传了图片则保存为bytes
+    image_bytes_list = []
+    if st.session_state.image_uploader:
+        image_bytes_list = [img.getvalue() for img in st.session_state.image_uploader]
+        st.session_state["current_images"] = image_bytes_list  # 保存为列表
+        
+
     # 输入验证
     if not prompt or len(prompt) > 1000:
         error_msg = "输入不能为空或超过1000字符"
@@ -107,8 +121,10 @@ if prompt := st.chat_input():
                 "memory_model": memory_model,
                 "role_prompt": role_prompt,
                 "memory_threshold": memory_threshold,
-                "top_k": top_k
+                "top_k": top_k,
+                "image_bytes": image_bytes_list if image_bytes_list else []
             }
+
             logging.info(f"正在向后端发送请求: {request_data}")
 
             response = requests.post(

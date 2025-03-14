@@ -77,15 +77,27 @@ def chat_one(
     role_prompt: str = ROLEPLAY_PROMPT,
     memory_threshold: float = 0.6,
     top_k: int = 3,
+    image_bytes_list: List[bytes] = []
 ):
     try:
         # 记录接收到的参数
         logging.info(f"chat_one 接收到参数: content={content}, chat_model={chat_model}, memory_model={memory_model}, role_prompt={role_prompt}, memory_threshold={memory_threshold}, top_k={top_k}")
 
         role_prompt = "请你与我对话的时候扮演该角色：" + role_prompt
+
+        #### Test VLM
+        # 方案1 直接使用VLM获取图片描述，从而后续内容无需更改，多张图对应一个描述，这里为节省Token设定。
+            # 可选：1张图1个描述
+        if image_bytes_list:
+            logging.info("检测到图片输入，正在使用VLM获取图片描述...")
+            image_descriptions = reply_with_VLM(image_bytes_list=image_bytes_list)
+            content = "以下内容为相关多个图片的描述，假设你可以看到这些图片，根据图片的描述回答我的问题。图片的描述为：" + image_descriptions + "\n" + content
+        ####
+
+
         # 获取模型的回复
-        logging.info(f"用户输入: {content}")
-        reply = reply_with_memory(content, chat_model, memory_model, role_prompt, memory_threshold, top_k)
+        logging.info(f"用户输入: {content}, 图片个数: {len(image_bytes_list)}")
+        reply = reply_with_memory(content, chat_model, memory_model, role_prompt, memory_threshold, top_k, image_bytes_list)
         logging.info(f"模型回复: {reply}")
 
         # 抽取记忆
@@ -106,6 +118,28 @@ def chat_one(
         logging.error(f"Error in chat_one: {e}")
         return "抱歉，我无法处理这个请求。", False, ""
 
+def reply_with_VLM(
+        image_bytes_list: List[bytes],
+        chat_model: Literal[MOONSHOT_MODEL]
+):
+    try:
+        # 记录接收到的参数
+        logging.info(f"reply_with_VLM 接收到参数: images={len(image_bytes_list)}")
+
+        # 调用 LLM 获取回复
+        if chat_model == MOONSHOT_MODEL:
+            logging.info("使用 Moonshot 模型生成回复")
+            reply = call_moonshot_vlm(images=image_bytes_list)
+        # 判断返回的内容是否包含错误信息
+        if "Error" in reply:
+            logging.error(f"LLM API 错误：{reply}")
+            return "抱歉，处理您的请求时出现错误。"
+
+        return reply
+
+    except Exception as e:
+        logging.error(f"Error in reply_with_memory: {e}")
+        return "抱歉，我无法处理这个请求。"
 # reply_with_memory() - 根据用户输入和记忆生成回复
 def reply_with_memory(
     content: str,
@@ -271,6 +305,7 @@ async def chat(request: ChatRequest):
             request.role_prompt,
             request.memory_threshold,
             request.top_k,
+            request.image_bytes_list
         )
 
         logging.info(f"返回给用户的回复: {reply}")

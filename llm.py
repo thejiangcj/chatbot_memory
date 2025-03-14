@@ -1,11 +1,14 @@
 import time
 import os
 import logging
+import base64
 from openai import OpenAI
 from config import (
     MOONSHOT_API_KEY, DEEPSEEK_API_KEY,
     ROLEPLAY_PROMPT, UNIVERSAL_ROLEPLAY_PROMPT,
-    MOONSHOT_MODEL, DEEPSEEK_MODEL
+    MOONSHOT_MODEL, DEEPSEEK_MODEL,
+    MOONSHOT_VLM_MODEL,
+    VLM_SYSTEM_PROMPT, VLM_USER_PROMPT
 )
 
 # 配置日志记录
@@ -63,6 +66,20 @@ def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVER
     """
     return call_llm(prompt, system_prompt, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
 
+def call_moonshot_vlm(
+        prompt: str = VLM_USER_PROMPT,
+        system_prompt:str = VLM_SYSTEM_PROMPT,
+        images: list[bytes],
+        model:str = MOONSHOT_VLM_MODEL,
+        retries: int = 3,
+        delay: int = 20,
+        temperature: float = 0.95
+):
+    """
+    调用 Moonshot API 的封装函数。
+    """
+    return call_vlm(prompt, system_prompt, images=images, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
+
 def call_deepseek_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = DEEPSEEK_MODEL, retries: int = 3, delay: int = 20):
     """
     调用 DeepSeek API 的封装函数。
@@ -113,6 +130,68 @@ async def call_deepseek_llm_async(prompt: str, system_prompt: str = ROLEPLAY_PRO
     异步调用 DeepSeek API 的封装函数。
     """
     return await call_llm_async(prompt, system_prompt, model, DEEPSEEK_API_KEY, "https://api.deepseek.com", retries, delay)
+
+def call_vlm(
+        prompt: str = VLM_USER_PROMPT,
+        system_prompt:str = VLM_SYSTEM_PROMPT,
+        images: list[bytes],
+        model:str = MOONSHOT_VLM_MODEL,
+        api_key: str,
+        base_url: str,
+        retries: int = 3,
+        delay: int = 20,
+        temperature: float = 0.95
+    ):
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+    )
+    attempt = 0
+
+    message_content = []
+
+    for image in images:
+        message_content.append(
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{base64.b64encode(image).decode('utf-8')}",
+                },
+            }
+        )
+    message_content.append(
+        {
+            "type": "text",
+            "text": prompt
+        }
+    )
+    while attempt < retries:
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        # 注意这里，content 由原来的 str 类型变更为一个 list，这个 list 中包含多个部分的内容，图片（image_url）是一个部分（part），
+                        # 文字（text）是一个部分（part）
+                        "content": message_content
+                    },
+                ],
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            attempt += 1
+            logging.error(f"请求发生错误: {e}，正在重试... (尝试 {attempt}/{retries})")
+            if attempt >= retries:
+                logging.error("重试次数已达到上限，无法处理请求。")
+                return "Error: 请求失败，已尝试多次。"
+            logging.info(f"等待 {delay} 秒后重新尝试...")
+            time.sleep(delay)
+
+    return "Error: 请求失败，已尝试多次。"
+
+
 
 if __name__ == "__main__":
     # 测试调用 Moonshot
