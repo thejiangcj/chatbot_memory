@@ -51,6 +51,9 @@ Deepseek因为用的人爆满，所以API也很慢，请耐心等待一下结果
     ```bash
     streamlit run chat_frontend.py
     ```
+4. **安装redis**
+
+    本项目使用redis作为记忆存储的数据库，因此需要安装redis。
 
 ## 设计说明
 
