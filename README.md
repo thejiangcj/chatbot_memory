@@ -15,7 +15,7 @@
 
 ## 启动指南
 
-### 使用 Docker Compose 启动
+### 使用 Docker Compose 启动（推荐）
 
 ```bash
 docker-compose build
@@ -26,7 +26,8 @@ docker-compose up
 
 启动后，访问 [http://localhost:8501](http://localhost:8501) 即可使用。初次启动时，若遇到8000端口无法连接的情况，请稍等片刻。
 
-### 本地启动步骤
+### 本地启动(不建议，很麻烦)
+
 1. **创建 Conda 环境并安装依赖**
     ```bash
     conda create -n chatbot-mem python==3.10
@@ -63,6 +64,18 @@ v3.0（待开发）：会利用LLM来判断是否需要更新某个记忆
 
 通过向量模型计算用户当前输入与所存储的记忆进行相似度计算，选择最相似的top k个记忆条目作为“回忆”的内容。随后会将搜索到的记忆内容添加到模型的Prompt里，让模型根据该记忆进行回答。
 
+## 目前仍存在（但难以根除）的问题
+
+1.
+
+
+## 技术选型
+
+- **LLM**：deepseek和moonshot
+- **前端**：streamlit（界面美观）
+- **后端**：fastapi（高效、易用）
+
+
 ## 开发进度与待办事项
 - [x] 异常处理：memory.txt 不存在时的处理
 - [x] 记忆筛选：根据阈值筛选记忆
@@ -87,10 +100,3 @@ v3.0（待开发）：会利用LLM来判断是否需要更新某个记忆
 - [x] 在拟人回复中利用记忆
 - [x] 对话页面前端
 - [x] 进阶：更新记忆（相似度+prompt判断）
-
-
-## 技术选型
-
-- **LLM**：deepseek和moonshot
-- **前端**：streamlit（界面美观）
-- **后端**：fastapi（高效、易用）
