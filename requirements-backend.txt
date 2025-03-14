@@ -4,3 +4,7 @@ pydantic
 numpy
 FlagEmbedding
 openai
+zhipuai
+fastapi-cache
+redis
+slowapi

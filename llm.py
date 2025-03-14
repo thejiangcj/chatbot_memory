@@ -1,61 +1,126 @@
 import time
+import os
+import logging
 from openai import OpenAI
-from config import MOONSHOT_API_KEY, ROLEPLAY_PROMPT, UNIVERSAL_ROLEPLAY_PROMPT
+from config import (
+    MOONSHOT_API_KEY, DEEPSEEK_API_KEY,
+    ROLEPLAY_PROMPT, UNIVERSAL_ROLEPLAY_PROMPT,
+    MOONSHOT_MODEL, DEEPSEEK_MODEL
+)
 
-def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = "moonshot-v1-8k", retries: int = 3, delay: int = 20):
+# 配置日志记录
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def call_llm(prompt: str, system_prompt: str, model: str, api_key: str, base_url: str, retries: int = 3, delay: int = 20, temperature: float = 0.95):
     """
-    使用 Moonshot API 调用 LLM 接口，获取回复，并实现自动重试机制。
+    通用的 LLM 调用函数，支持不同的 API 配置。
 
     参数：
     prompt (str): 提供给 LLM 的提示词。
-    model (str): 使用的 LLM 模型名称，默认为 "moonshot-v1-8k"。
+    system_prompt (str): 系统角色的提示词。
+    model (str): 使用的 LLM 模型名称。
+    api_key (str): API 密钥。
+    base_url (str): API 基本 URL。
     retries (int): 重试次数，默认为 3 次。
     delay (int): 重试间隔时间，默认为 20 秒。
+    temperature (float): 生成文本的温度，默认为 0.95。
 
     返回：
     str: LLM 的回复内容，或错误消息。
     """
-    # 创建 OpenAI 客户端实例
     client = OpenAI(
-        api_key=MOONSHOT_API_KEY,  # 替换为实际的 API 密钥
-        base_url="https://api.moonshot.cn/v1",  # Moonshot API 基本 URL
+        api_key=api_key,
+        base_url=base_url,
     )
 
     attempt = 0
     while attempt < retries:
         try:
-            # 调用 Moonshot API 的 chat.completions 创建接口
             completion = client.chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.95
+                temperature=temperature,
+                timeout=30  # 设置超时时间为30秒
             )
-            
-            # 返回 LLM 的回复
             return completion.choices[0].message.content
-        
         except Exception as e:
             attempt += 1
-            print(f"请求发生错误: {e}，正在重试... (尝试 {attempt}/{retries})")
-            
-            # 如果已经尝试了指定次数，退出并返回错误消息
+            logging.error(f"请求发生错误: {e}，正在重试... (尝试 {attempt}/{retries})")
             if attempt >= retries:
-                print("重试次数已达到上限，无法处理请求。")
+                logging.error("重试次数已达到上限，无法处理请求。")
                 return "Error: 请求失败，已尝试多次。"
-            
-            # 等待一段时间后再重试
-            print(f"等待 {delay} 秒后重新尝试...")
+            logging.info(f"等待 {delay} 秒后重新尝试...")
             time.sleep(delay)
 
-    # 如果没有成功返回，在重试达到上限后仍然会返回此信息
     return "Error: 请求失败，已尝试多次。"
 
+def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = MOONSHOT_MODEL, retries: int = 3, delay: int = 20):
+    """
+    调用 Moonshot API 的封装函数。
+    """
+    return call_llm(prompt, system_prompt, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
+
+def call_deepseek_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = DEEPSEEK_MODEL, retries: int = 3, delay: int = 20):
+    """
+    调用 DeepSeek API 的封装函数。
+    """
+    return call_llm(prompt, system_prompt, model, DEEPSEEK_API_KEY, "https://api.deepseek.com", retries, delay)
+
+async def call_llm_async(prompt: str, system_prompt: str, model: str, api_key: str, base_url: str, retries: int = 3, delay: int = 20, temperature: float = 0.95):
+    """
+    异步调用 LLM 的通用函数。
+    """
+    client = OpenAI(
+        api_key=api_key,
+        base_url=base_url,
+    )
+
+    attempt = 0
+    while attempt < retries:
+        try:
+            completion = await client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=temperature,
+                timeout=30
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            attempt += 1
+            logging.error(f"请求发生错误: {e}，正在重试... (尝试 {attempt}/{retries})")
+            if attempt >= retries:
+                logging.error("重试次数已达到上限，无法处理请求。")
+                return "Error: 请求失败，已尝试多次。"
+            logging.info(f"等待 {delay} 秒后重新尝试...")
+            await asyncio.sleep(delay)
+
+    return "Error: 请求失败，已尝试多次。"
+
+async def call_moonshot_llm_async(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = MOONSHOT_MODEL, retries: int = 3, delay: int = 20):
+    """
+    异步调用 Moonshot API 的封装函数。
+    """
+    return await call_llm_async(prompt, system_prompt, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
+
+async def call_deepseek_llm_async(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = DEEPSEEK_MODEL, retries: int = 3, delay: int = 20):
+    """
+    异步调用 DeepSeek API 的封装函数。
+    """
+    return await call_llm_async(prompt, system_prompt, model, DEEPSEEK_API_KEY, "https://api.deepseek.com", retries, delay)
 
 if __name__ == "__main__":
-    # 测试调用
+    # 测试调用 Moonshot
     prompt = "醒了？"
-    response = call_moonshot_llm(prompt)
-    print(response)
+    moonshot_response = call_moonshot_llm(prompt)
+    print("Moonshot Response:", moonshot_response)
+
+
+    # 测试调用 DeepSeek
+    deepseek_response = call_deepseek_llm(prompt)
+    print("DeepSeek Response:", deepseek_response)

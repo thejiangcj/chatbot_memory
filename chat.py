@@ -1,175 +1,287 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from llm import *  # 假设你已经有一个名为 llm.py 的模块
-from config import MEM_EXTRACTION_PROMPT  # 假设 MEM_EXTRACTION_PROMPT 是你在 config 中定义的变量
-from db import save_to_db, get_all_db
-from bge import compute_similarity
-from config import MEMORY_USE_PROMPT
+from typing import Literal, List
+import numpy as np
+import logging
+from llm import call_moonshot_llm, call_deepseek_llm  # 假设你已经实现了这些函数
+from db import save_to_db, get_all_db, clear_db  # 添加 clear_db 函数
+from bge import compute_similarity  # 假设你已经实现了这个函数
+from config import MEM_EXTRACTION_PROMPT, MEMORY_USE_PROMPT, ROLEPLAY_PROMPT, MOONSHOT_MODEL, DEEPSEEK_MODEL
 
 # 创建 FastAPI 实例
 app = FastAPI()
 
+# 配置日志
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 # 定义输入数据结构
 class ChatRequest(BaseModel):
     content: str
+    chat_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL]
+    memory_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL]
+    role_prompt: str = ROLEPLAY_PROMPT
+    memory_threshold: float = 0.6
+    top_k: int = 3
+
+def process_and_merge_memory(new_mem: str, threshold: float):
+    """处理新记忆条目，合并或替换现有记忆"""
+    existing_mems = get_all_db()
+    
+    
+    logging.info(f"待添加记忆：{new_mem}")
+    logging.info(f"现有记忆：{existing_mems}")
+    
+    if not existing_mems:
+        save_to_db([new_mem])
+        logging.info(f"记忆库为空，直接添加新记忆：{new_mem}")
+        return
+    
+    # 计算新记忆与所有现有记忆的相似度
+    similarities = compute_similarity([new_mem], existing_mems)
+    similarities = np.array(similarities).flatten()
+    
+    logging.info(f"记忆相似度们：{similarities}")
+    max_sim_index = np.argmax(similarities)
+    max_sim = similarities[max_sim_index]
+    
+    if max_sim >= threshold:
+        # 替换现有记忆
+        replace_in_db(max_sim_index, new_mem)
+        logging.info(f"替换相似记忆：索引 {max_sim_index}，相似度 {max_sim:.4f}")
+    else:
+        # 添加新记忆
+        save_to_db([new_mem])
+        logging.info(f"添加新记忆：{new_mem}")
+
+def replace_in_db(index: int, new_memory: str):
+    """替换指定索引的记忆条目"""
+    try:
+        memories = get_all_db()
+        if index < 0 or index >= len(memories):
+            logging.error(f"替换索引 {index} 无效，当前记忆数量：{len(memories)}")
+            return False
+        
+        memories[index] = new_memory
+        clear_db()          # 清空原有数据库
+        save_to_db(memories) # 重新写入修改后的记忆列表
+        return True
+    except Exception as e:
+        logging.error(f"替换记忆时出错：{e}")
+        return False
 
 # chat_one() - 处理聊天回复并抽取记忆
-# 输入：content（用户的输入）
-# 输出：reply（模型的回复），has_mem（是否有记忆），memory（抽取的记忆内容）
-def chat_one(content: str):
+def chat_one(
+    content: str,
+    chat_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
+    memory_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
+    role_prompt: str = ROLEPLAY_PROMPT,
+    memory_threshold: float = 0.6,
+    top_k: int = 3,
+):
     try:
-        # 获取模型的回复
-        print(f"用户输入: {content}")  # 打印用户输入
-        reply = reply_with_memory(content)
-        print(f"模型回复: {reply}")  # 打印模型回复
-        
-        # 抽取记忆
-        has_mem, memory = extract_mem(content)
-        print(f"记忆抽取结果: {'有记忆' if has_mem else '无记忆'}")  # 打印是否有记忆
-        
-        if has_mem:
-            print(f"保存记忆到数据库: {memory}")  # 打印保存的记忆内容
-            save_to_db(memory)  # 保存到 db
-        else:
-            print("没有找到需要保存的记忆")  # 没有记忆时的提示
-        
-        return reply, has_mem, memory
-    
-    except Exception as e:
-        # 错误处理，捕获并打印异常
-        print(f"Error in chat_one: {e}")
-        return "抱歉，我无法处理这个请求。", False, ""  # 出现异常时返回默认值
+        # 记录接收到的参数
+        logging.info(f"chat_one 接收到参数: content={content}, chat_model={chat_model}, memory_model={memory_model}, role_prompt={role_prompt}, memory_threshold={memory_threshold}, top_k={top_k}")
 
-def reply_with_memory(content: str):
-    top_k = 3
-    
-    # 获取相关记忆
-    memory = [item[0] for item in search_mem(content, top_k)] if search_mem(content, top_k) else []
-    
-    # 如果没有记忆，返回空字符串
-    if not memory:
-        memory_str = ""  # 没有记忆时，拼接为空字符串
-    else:
-        memory_str = "".join(memory)  # 使用 "" 来拼接列表中的元素    
-    
+        role_prompt = "请你与我对话的时候扮演该角色：" + role_prompt
+        # 获取模型的回复
+        logging.info(f"用户输入: {content}")
+        reply = reply_with_memory(content, chat_model, memory_model, role_prompt, memory_threshold, top_k)
+        logging.info(f"模型回复: {reply}")
+
+        # 抽取记忆
+        has_mem, memory = extract_mem(content, memory_model)
+        logging.info(f"记忆抽取结果: {'有记忆' if has_mem else '无记忆'}")
+
+        if has_mem:
+            # 逐个处理记忆条目（合并或添加）
+            for mem in memory:
+                process_and_merge_memory(mem, memory_threshold)
+            logging.info(f"处理完成的新记忆列表: {memory}")
+        else:
+            logging.info("没有找到需要保存的记忆")
+
+        return reply, has_mem, memory
+
+    except Exception as e:
+        logging.error(f"Error in chat_one: {e}")
+        return "抱歉，我无法处理这个请求。", False, ""
+
+# reply_with_memory() - 根据用户输入和记忆生成回复
+def reply_with_memory(
+    content: str,
+    chat_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
+    memory_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
+    role_prompt: str = ROLEPLAY_PROMPT,
+    memory_threshold: float = 0.6,
+    top_k: int = 3,
+):
     try:
-        content = content + MEMORY_USE_PROMPT + memory_str
-        
-        # 调用 Moonshot API 获取回复
-        reply = call_moonshot_llm(content)
-        
+        # 记录接收到的参数
+        logging.info(f"reply_with_memory 接收到参数: content={content}, chat_model={chat_model}, memory_model={memory_model}, role_prompt={role_prompt}, memory_threshold={memory_threshold}, top_k={top_k}")
+
+        # 获取相关记忆
+        memory_results = search_mem(content, top_k, memory_threshold)
+        memory = [item[0] for item in memory_results] if memory_results else []
+
+        # 如果没有记忆，返回空字符串
+        memory_str = "".join(memory) if memory else ""
+        logging.info(f"召回的记忆内容: {memory_str}")
+
+        # 拼接记忆提示词
+        content_with_memory = content + MEMORY_USE_PROMPT + memory_str
+        logging.info(f"拼接后的输入内容: {content_with_memory}")
+
+        # 调用 LLM 获取回复
+        if chat_model == MOONSHOT_MODEL:
+            logging.info("使用 Moonshot 模型生成回复")
+            reply = call_moonshot_llm(prompt=content_with_memory, system_prompt=role_prompt)
+        elif chat_model == DEEPSEEK_MODEL:
+            logging.info("使用 DeepSeek 模型生成回复")
+            reply = call_deepseek_llm(prompt=content_with_memory, system_prompt=role_prompt)
+        else:
+            logging.info("默认使用 Moonshot 模型生成回复")
+            reply = call_moonshot_llm(prompt=content_with_memory, system_prompt=role_prompt)
+
         # 判断返回的内容是否包含错误信息
         if "Error" in reply:
-            print(f"Moonshot API 错误：{reply}")  # 打印错误信息
-            return "抱歉，处理您的请求时出现错误。"  # 处理错误时返回自定义的错误信息
-        
-        return reply
-    except Exception as e:
-        # 错误处理，捕获并打印异常
-        print(f"Error in reply_with_memory: {e}")
-        return "抱歉，我无法处理这个请求。"  # 出现异常时返回默认值
+            logging.error(f"LLM API 错误：{reply}")
+            return "抱歉，处理您的请求时出现错误。"
 
-# extract_mem() - 使用 Moonshot LLM 分析用户输入，判断是否有需要抽取的记忆
-# 输入：content（用户的输入）
-# 输出：has_mem（是否有记忆），memory（抽取的记忆内容）
-def extract_mem(content: str):
+        return reply
+
+    except Exception as e:
+        logging.error(f"Error in reply_with_memory: {e}")
+        return "抱歉，我无法处理这个请求。"
+
+# extract_mem() - 使用 LLM 分析用户输入，判断是否有需要抽取的记忆
+def extract_mem(content: str, memory_model: str):
     try:
+        logging.info(f"分析用户输入的记忆: {content}")
+
         # 调用 LLM 获取记忆分析结果
-        print(f"分析用户输入的记忆: {content}")  # 打印分析的内容
-        memory = call_moonshot_llm(prompt=f"用户:{content}", system_prompt=MEM_EXTRACTION_PROMPT)
-        
+        if memory_model == MOONSHOT_MODEL:
+            logging.info("使用 Moonshot 模型抽取记忆")
+            memory = call_moonshot_llm(prompt=f"用户:{content}", system_prompt=MEM_EXTRACTION_PROMPT)
+        else:
+            logging.info("使用 DeepSeek 模型抽取记忆")
+            memory = call_deepseek_llm(prompt=f"用户:{content}", system_prompt=MEM_EXTRACTION_PROMPT)
+
         # 判断返回的内容是否包含错误信息
         if "Error" in memory:
-            print(f"Moonshot API 错误：{memory}")  # 打印错误信息
-            return False, ""  # 返回默认值
-        
-        print(f"记忆分析结果: {memory}")  # 打印分析结果
-        
+            logging.error(f"LLM API 错误：{memory}")
+            return False, ""
+
+        logging.info(f"记忆分析结果: {memory}")
+
         # 如果 LLM 返回的是多个记忆，用 '&&' 连接它们
         if memory == "无":
-            print("没有抽取到有效的记忆")  # 没有记忆时的提示
+            logging.info("没有抽取到有效的记忆")
             return False, ""
         else:
             # 如果返回多个记忆，用 "&&" 隔开
             memory_list = memory.split("&&")
-            # 去除多余的空格并清理空字符串
             memory_list = [m.strip() for m in memory_list if m.strip()]
-            print(f"抽取到的记忆: {memory_list}")  # 打印抽取到的记忆
-            
+            logging.info(f"抽取到的记忆: {memory_list}")
+
             # 返回拆分后的记忆条目
             return True, memory_list
-    
+
     except Exception as e:
-        # 错误处理，捕获并打印异常
-        print(f"Error in extract_mem: {e}")
-        return False, ""  # 出现异常时返回默认值
+        logging.error(f"Error in extract_mem: {e}")
+        return False, ""
 
+# search_mem() - 搜索与用户输入相关的记忆
+def search_mem(content: str, top_k: int, threshold: float = 0.6):
+    logging.info(f"搜索记忆的关键词：{content}")
 
-# 添加一个api获取所有的memory
+    # 获取所有存储的记忆
+    memories = get_all_db()
+    logging.info(f"当前记忆库中的记忆数量: {len(memories)}")
+
+    # 如果记忆库为空，直接返回空列表
+    if not memories:
+        logging.info("记忆库为空，没有可搜索的记忆")
+        return []
+
+    # 计算关键词与所有记忆的相似度
+    keyword = [content]
+    similarity_matrix = compute_similarity(keyword, memories)
+    logging.info(f"相似度矩阵：\n{similarity_matrix}")
+
+    # 转换为 numpy 数组以便处理
+    similarity = np.array(similarity_matrix).flatten()
+
+    # 判断相似度数组是否为空
+    if similarity.size == 0:
+        logging.info("相似度数组为空")
+        return []
+
+    # 获取相似度大于阈值的索引
+    valid_indices = np.where(similarity >= threshold)[0]
+
+    # 如果没有符合条件的记忆，返回空列表
+    if valid_indices.size == 0:
+        logging.info("没有找到相似度超过阈值的记忆")
+        return []
+
+    # 获取 top_k 个最大相似度的索引
+    top_k_indices = valid_indices[similarity[valid_indices].argsort()[-top_k:][::-1]]
+    logging.info(f"最相似的 {top_k} 个记忆的索引：{top_k_indices}")
+
+    # 获取对应的记忆
+    top_k_memories = [(memories[i], similarity[i]) for i in top_k_indices]
+    for idx, (memory, sim) in enumerate(top_k_memories):
+        logging.info(f"记忆 {idx}: {memory} (相似度: {sim})")
+
+    return top_k_memories
+
+# 添加一个 API 获取所有的 memory
 @app.get("/memories")
 async def get_all_memories():
     try:
-        memories = get_all_db()  # 从数据库获取所有记忆
-        return {"memories": memories}  # 返回所有记忆
+        memories = get_all_db()
+        logging.info(f"获取所有记忆: {memories}")
+        return {"memories": memories}
     except Exception as e:
+        logging.error(f"获取记忆时出错: {e}")
         raise HTTPException(status_code=500, detail=f"Error occurred: {e}")
 
-def search_mem(content: str, top_k: int):
-    import numpy as np
-    
-    print(f"搜索记忆的关键词：{content}")
-    
-    # 获取所有存储的记忆
-    memories = get_all_db()
-    
-    # 计算关键词与所有记忆的相似度
-    keyword = [content]  # 关键词列表
-    similarity = compute_similarity(keyword, memories)  # 假设返回的是一个二维列表或numpy数组
-    print(f"相似度矩阵：\n{similarity}")
-    
-    # 转换为 numpy 数组以便处理
-    similarity = np.array(similarity).flatten()  # 假设相似度是二维的，转换为一维
-    
-    # 判断相似度数组是否为空
-    if similarity.size > 0:
-        # 获取 top_k 个最大相似度的索引
-        top_k_indices = similarity.argsort()[-top_k:][::-1]  # argsort 会返回从小到大的索引，这里我们取反来获取最大的索引
-    
-        print(f"最相似的 {top_k} 个记忆的索引：{top_k_indices}")
-    
-        # 获取对应的记忆
-        top_k_memories = [memories[i] for i in top_k_indices]
-    
-        print(f"最相似的 {top_k} 个记忆：")
-        for idx, memory in zip(top_k_indices, top_k_memories):
-            print(f"记忆 {idx}: {memory} (相似度: {similarity[idx]})")
-    
-        # 返回最相似的记忆和相似度
-        return [(memories[i], similarity[i]) for i in top_k_indices]
-    else:
-        print("相似度数组为空")
-        return []  # 如果相似度数组为空，返回空列表
-    
+# 添加一个 API 清空所有记忆
+@app.delete("/memories")
+async def clear_all_memories():
+    try:
+        clear_db()  # 调用清空函数
+        logging.info("所有记忆已清空")
+        return {"message": "所有记忆已清空"}
+    except Exception as e:
+        logging.error(f"清空记忆时出错: {e}")
+        raise HTTPException(status_code=500, detail=f"Error occurred: {e}")
+
 # 创建聊天接口
 @app.post("/chat")
 async def chat(request: ChatRequest):
     try:
-        # 从请求中获取用户输入的内容
-        content = request.content
-        print(f"收到用户请求: {content}")  # 打印收到的请求内容
-        
-        # 调用 chat_one 函数获取回复、是否有记忆以及记忆内容
-        reply, has_mem, memory = chat_one(content)
-        
-        print(f"返回给用户的回复: {reply}")  # 打印返回给用户的回复
-        
-        # 返回模型的回复和记忆信息
+        # 记录接收到的请求
+        logging.info(f"收到用户请求: content={request.content}, chat_model={request.chat_model}, memory_model={request.memory_model}, role_prompt={request.role_prompt}, memory_threshold={request.memory_threshold}, top_k={request.top_k}")
+
+        reply, has_mem, memory = chat_one(
+            request.content,
+            request.chat_model,
+            request.memory_model,
+            request.role_prompt,
+            request.memory_threshold,
+            request.top_k,
+        )
+
+        logging.info(f"返回给用户的回复: {reply}")
+
         return {"reply": reply, "has_mem": has_mem, "memory": memory}
-    
+
     except Exception as e:
+        logging.error(f"处理请求时出错: {e}")
         raise HTTPException(status_code=500, detail=f"Error occurred: {e}")
 
-
-if __name__ == '__main__':
-    result = search_mem("萨摩耶", 2)
-    print(result)
+# 测试代码
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

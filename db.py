@@ -1,35 +1,49 @@
 # db.py
+from typing import List
+import json
+import os
 
-def save_to_db(content: str):
-    """将数据追加到 memory.txt 文件中，每次存储新的一行"""
+DB_PATH = "memory_db.json"
+
+def save_to_db(memories: List[str]):
+    """保存记忆到数据库（追加模式）"""
     try:
-        with open("memory.txt", "a", encoding="utf-8") as file:
-            file.write(content + "\n")  # 追加一行内容
-        print("Data saved successfully.")
+        existing = get_all_db()
+        existing.extend(memories)  # 注意这里修正了括号问题
+        with open(DB_PATH, 'w') as f:
+            json.dump(existing, f)
     except Exception as e:
-        print(f"Error saving data to db: {e}")
+        print(f"保存到数据库失败: {e}")
 
-def get_all_db():
-    """从 memory.txt 文件中读取所有行，每行作为一条数据"""
+def replace_in_db(index: int, new_memory: str) -> bool:
+    """替换指定索引的记忆条目（新增函数）"""
     try:
-        with open("memory.txt", "r", encoding="utf-8") as file:
-            lines = file.readlines()  # 读取所有行
-            # 清理每一行的换行符
-            lines = [line.strip() for line in lines]
+        memories = get_all_db()
+        if index < 0 or index >= len(memories):
+            return False
         
-        print(f"读取到 {len(lines)} 条记忆数据。")  # 打印读取的行数
-        return lines
-    
+        memories[index] = new_memory
+        with open(DB_PATH, 'w') as f:
+            json.dump(memories, f)
+        return True
     except Exception as e:
-        print(f"Error reading data from db: {e}")
-        return []  # 如果读取失败，返回空列表
+        print(f"替换记忆失败: {e}")
+        return False
 
-# 测试函数
-if __name__ == "__main__":
-    # test_content = "这是一条测试内容"
-    # save_to_db(test_content)
-    
-    # 读取并打印所有内容
-    memories = get_all_db()
-    for memory in memories:
-        print(f"记忆内容: {memory}")
+def get_all_db() -> List[str]:
+    """获取所有记忆"""
+    if not os.path.exists(DB_PATH):
+        return []
+    try:
+        with open(DB_PATH, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def clear_db():
+    """清空所有记忆"""
+    try:
+        with open(DB_PATH, 'w') as f:
+            json.dump([], f)
+    except Exception as e:
+        print(f"清空数据库失败: {e}")

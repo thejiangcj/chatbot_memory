@@ -20,6 +20,9 @@ COPY . /app
 COPY requirements-backend.txt /app/
 RUN pip install --no-cache-dir -r requirements-backend.txt
 
+# 安装新增的依赖
+RUN pip install fastapi-cache redis slowapi numpy
+
 # 暴露端口（假设 FastAPI 默认运行在 8000 端口）
 EXPOSE 8000
 
