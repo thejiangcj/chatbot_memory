@@ -59,8 +59,8 @@ if "mem_changed" not in st.session_state:
 # 显示侧边栏的输入选项和记忆
 with st.sidebar:
     st.subheader("设置")
-    chat_model = st.selectbox("对话模型", ["moonshot", "deepseek-chat"])
-    memory_model = st.selectbox("记忆抽取模型", ["moonshot", "deepseek-chat"])
+    chat_model = st.selectbox("对话模型", ["moonshot-v1-8k", "deepseek-chat"])
+    memory_model = st.selectbox("记忆抽取模型", ["moonshot-v1-8k", "deepseek-chat"])
     role_prompt = st.text_area("人设", "请你扮演一个小狗狗和我说话，注意语气可爱、亲密，叫我“主人”，喜欢用emoji", height=100)
     top_k = st.number_input("记忆召回Top K", min_value=1, max_value=5, step=1, value=3)
     memory_threshold = st.number_input("输入记忆阈值", min_value=0.0, max_value=1.0, step=0.01, value=0.6)
