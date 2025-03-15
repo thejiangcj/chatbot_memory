@@ -11,7 +11,7 @@ services:
     image: caizhuoyue126/memory-backend:v1.0
     build: .
     ports:
-      - "8035:8000"
+      - "8000:8000"
     depends_on:
       - redis
     environment:

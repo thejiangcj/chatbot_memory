@@ -132,7 +132,7 @@ async def call_deepseek_llm_async(prompt: str, system_prompt: str = ROLEPLAY_PRO
     return await call_llm_async(prompt, system_prompt, model, DEEPSEEK_API_KEY, "https://api.deepseek.com", retries, delay)
 
 def call_vlm(
-        images: list[bytes],
+        images: list[str],
         api_key: str,
         base_url: str,
         prompt: str = VLM_USER_PROMPT,
@@ -155,7 +155,7 @@ def call_vlm(
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/png;base64,{base64.b64encode(image).decode('utf-8')}",
+                    "url": f"data:image/png;base64,{image}",
                 },
             }
         )
@@ -165,6 +165,7 @@ def call_vlm(
             "text": prompt
         }
     )
+    # logging.info(f"message_content: {message_content}")
     while attempt < retries:
         try:
             completion = client.chat.completions.create(

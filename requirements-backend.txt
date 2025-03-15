@@ -11,3 +11,4 @@ slowapi
 
 # multi model
 # rapidocr
+loguru
