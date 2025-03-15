@@ -64,12 +64,12 @@ def call_moonshot_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVER
     """
     调用 Moonshot API 的封装函数。
     """
-    return call_llm(prompt, system_prompt, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
+    return call_llm(prompt, system_prompt, model, api_key=MOONSHOT_API_KEY, base_url="https://api.moonshot.cn/v1", retries=retries, delay=delay)
 
 def call_moonshot_vlm(
+        images: list[bytes],
         prompt: str = VLM_USER_PROMPT,
         system_prompt:str = VLM_SYSTEM_PROMPT,
-        images: list[bytes],
         model:str = MOONSHOT_VLM_MODEL,
         retries: int = 3,
         delay: int = 20,
@@ -78,7 +78,7 @@ def call_moonshot_vlm(
     """
     调用 Moonshot API 的封装函数。
     """
-    return call_vlm(prompt, system_prompt, images=images, model, MOONSHOT_API_KEY, "https://api.moonshot.cn/v1", retries, delay)
+    return call_vlm(images=images, model=model, api_key=MOONSHOT_API_KEY, base_url="https://api.moonshot.cn/v1", prompt=prompt, system_prompt=system_prompt, retries=retries, delay=delay)
 
 def call_deepseek_llm(prompt: str, system_prompt: str = ROLEPLAY_PROMPT + UNIVERSAL_ROLEPLAY_PROMPT, model: str = DEEPSEEK_MODEL, retries: int = 3, delay: int = 20):
     """
@@ -132,12 +132,12 @@ async def call_deepseek_llm_async(prompt: str, system_prompt: str = ROLEPLAY_PRO
     return await call_llm_async(prompt, system_prompt, model, DEEPSEEK_API_KEY, "https://api.deepseek.com", retries, delay)
 
 def call_vlm(
-        prompt: str = VLM_USER_PROMPT,
-        system_prompt:str = VLM_SYSTEM_PROMPT,
         images: list[bytes],
-        model:str = MOONSHOT_VLM_MODEL,
         api_key: str,
         base_url: str,
+        prompt: str = VLM_USER_PROMPT,
+        system_prompt:str = VLM_SYSTEM_PROMPT,
+        model:str = MOONSHOT_VLM_MODEL,
         retries: int = 3,
         delay: int = 20,
         temperature: float = 0.95

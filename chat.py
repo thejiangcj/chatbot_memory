@@ -6,7 +6,7 @@ import logging
 from llm import call_moonshot_llm, call_deepseek_llm  # 假设你已经实现了这些函数
 from db import save_to_db, get_all_db, clear_db  # 添加 clear_db 函数
 from bge import compute_similarity  # 假设你已经实现了这个函数
-from config import MEM_EXTRACTION_PROMPT, MEMORY_USE_PROMPT, ROLEPLAY_PROMPT, MOONSHOT_MODEL, DEEPSEEK_MODEL
+from config import MEM_EXTRACTION_PROMPT, MEMORY_USE_PROMPT, ROLEPLAY_PROMPT, MOONSHOT_MODEL, DEEPSEEK_MODEL, MOONSHOT_VLM_MODEL
 
 # 创建 FastAPI 实例
 app = FastAPI()
@@ -75,6 +75,7 @@ def chat_one(
     content: str,
     chat_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
     memory_model: Literal[MOONSHOT_MODEL, DEEPSEEK_MODEL],
+    vlm_model: Literal[MOONSHOT_VLM_MODEL],
     role_prompt: str = ROLEPLAY_PROMPT,
     memory_threshold: float = 0.6,
     top_k: int = 3,
@@ -91,7 +92,7 @@ def chat_one(
             # 可选：1张图1个描述
         if image_bytes_list:
             logging.info("检测到图片输入，正在使用VLM获取图片描述...")
-            image_descriptions = reply_with_VLM(image_bytes_list=image_bytes_list)
+            image_descriptions = reply_with_VLM(image_bytes_list=image_bytes_list, vlm_model=vlm_model)
             content = "以下内容为相关多个图片的描述，假设你可以看到这些图片，根据图片的描述回答我的问题。图片的描述为：" + image_descriptions + "\n" + content
         ####
 
@@ -121,14 +122,14 @@ def chat_one(
 
 def reply_with_VLM(
         image_bytes_list: List[bytes],
-        chat_model: Literal[MOONSHOT_MODEL]
+        vlm_model: Literal[MOONSHOT_VLM_MODEL]
 ):
     try:
         # 记录接收到的参数
         logging.info(f"reply_with_VLM 接收到参数: images={len(image_bytes_list)}")
 
         # 调用 LLM 获取回复
-        if chat_model == MOONSHOT_MODEL:
+        if vlm_model == MOONSHOT_VLM_MODEL:
             logging.info("使用 Moonshot 模型生成回复")
             reply = call_moonshot_vlm(images=image_bytes_list)
         # 判断返回的内容是否包含错误信息
@@ -306,7 +307,8 @@ async def chat(request: ChatRequest):
             request.role_prompt,
             request.memory_threshold,
             request.top_k,
-            request.image_bytes_list
+            request.image_bytes_list,
+            request.vlm_model
         )
 
         logging.info(f"返回给用户的回复: {reply}")
@@ -320,4 +322,4 @@ async def chat(request: ChatRequest):
 # 测试代码
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8035)

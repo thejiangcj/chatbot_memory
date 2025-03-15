@@ -13,7 +13,7 @@ st.caption("🚀 带有长期记忆的聊天哦")
 def get_memories():
     try:
         logging.info("正在从后端获取记忆数据...")
-        response = requests.get("http://backend:8000/memories")
+        response = requests.get("http://backend:8035/memories")
         if response.status_code == 200:
             memories = response.json().get("memories", [])
             logging.info(f"成功获取记忆数据: {memories}")
@@ -33,7 +33,7 @@ def get_memories():
 def clear_memories():
     try:
         logging.info("正在清空记忆数据...")
-        response = requests.delete("http://backend:8000/memories")
+        response = requests.delete("http://backend:8035/memories")
         if response.status_code == 200:
             logging.info("记忆已清空")
             st.session_state["memories"] = []  # 清空前端记忆
@@ -61,6 +61,7 @@ with st.sidebar:
     st.subheader("设置")
     chat_model = st.selectbox("对话模型", ["moonshot-v1-8k", "deepseek-chat"])
     memory_model = st.selectbox("记忆抽取模型", ["moonshot-v1-8k", "deepseek-chat"])
+    vlm_model = st.selectbox("图像描述模型", ["moonshot-v1-8k-vision-preview"])
     role_prompt = st.text_area("人设", "请你扮演一个小狗狗和我说话，注意语气可爱、亲密，叫我“主人”，喜欢用emoji", height=100)
     top_k = st.number_input("记忆召回Top K", min_value=1, max_value=5, step=1, value=3)
     memory_threshold = st.number_input("输入记忆阈值", min_value=0.0, max_value=1.0, step=0.01, value=0.6)
@@ -122,13 +123,14 @@ if prompt := st.chat_input():
                 "role_prompt": role_prompt,
                 "memory_threshold": memory_threshold,
                 "top_k": top_k,
-                "image_bytes": image_bytes_list if image_bytes_list else []
+                "image_bytes": image_bytes_list if image_bytes_list else [],
+                "vlm_model": vlm_model
             }
 
             logging.info(f"正在向后端发送请求: {request_data}")
 
             response = requests.post(
-                "http://backend:8000/chat",
+                "http://backend:8035/chat",
                 json=request_data
             )
             logging.info(f"后端响应状态码: {response.status_code}")

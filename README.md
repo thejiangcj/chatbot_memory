@@ -39,7 +39,7 @@ Deepseek因为用的人爆满，所以API也很慢，请耐心等待一下结果
     ```bash
     conda create -n chatbot-mem python==3.10
     conda activate chatbot-mem
-    pip install -r requirements.txt
+    pip install -r requirements-backend.txt
     ```
 
 2. **启动后端服务**
